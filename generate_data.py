@@ -4,7 +4,6 @@ Do not edit any constant: every number in the brief was measured on this exact o
 import os
 import numpy as np
 import pandas as pd
-
 HUBS = [
     ("HUB01", "Mumbai", "West", 1, 1500), ("HUB02", "Delhi", "North", 1, 1600),
     ("HUB03", "Bengaluru", "South", 1, 1450), ("HUB04", "Hyderabad", "South", 1, 1350),
