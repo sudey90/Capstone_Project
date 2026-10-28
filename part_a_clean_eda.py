@@ -1,206 +1,342 @@
 
-from pathlib import Path
+# ============================================
+# PART A: DATA CLEANING AND DELAY ANALYSIS
+# ============================================
 
 import pandas as pd
+from pathlib import Path
 
 from src.shipment_prep import clean_shipments, build_features
 
 
-# --------------------------------------------------
-# STEP 1: Define project folders
-# --------------------------------------------------
+# STEP 1: Find the project folders
 
-ROOT = Path(__file__).resolve().parent
+project_folder = Path(__file__).resolve().parent
 
-DATA_DIR = ROOT / "data"
-OUTPUT_DIR = ROOT / "outputs"
+data_folder = project_folder / "data"
+output_folder = project_folder / "outputs"
 
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+# Create the outputs folder if it does not exist
+output_folder.mkdir(exist_ok=True)
 
 
-# --------------------------------------------------
-# STEP 2: Load CSV files
-# --------------------------------------------------
+# STEP 2: Read the CSV files
 
-raw = pd.read_csv(DATA_DIR / "raw_shipments.csv")
-hubs = pd.read_csv(DATA_DIR / "hubs.csv")
-
-print("=" * 45)
-print("PART A: DATA CLEANING AND EDA")
-print("=" * 45)
+raw = pd.read_csv(data_folder / "raw_shipments.csv")
+hubs = pd.read_csv(data_folder / "hubs.csv")
 
 print("Raw rows:", len(raw))
 
 
-# --------------------------------------------------
-# STEP 3: Clean shipment data
-# --------------------------------------------------
+# STEP 3: Count duplicate rows
 
+# Remove exact duplicate rows
+raw_without_duplicates = raw.drop_duplicates()
+
+duplicate_rows_removed = len(raw) - len(raw_without_duplicates)
+
+print("Duplicate rows removed:", duplicate_rows_removed)
+
+
+# STEP 4: Count missing values BEFORE cleaning
+
+missing_distance_before = raw_without_duplicates["distance_km"].isna().sum()
+
+missing_weight_before = raw_without_duplicates["parcel_weight_kg"].isna().sum()
+
+missing_value_before = raw_without_duplicates["declared_value"].isna().sum()
+
+missing_payment_before = raw_without_duplicates["payment_mode"].isna().sum()
+
+# Count weights greater than 100 kg
+sentinel_rows = (
+    raw_without_duplicates["parcel_weight_kg"] > 100
+).sum()
+
+# Count different service type spellings before cleaning
+service_types_before = raw_without_duplicates["service_type"].nunique()
+
+
+# STEP 5: Clean the shipment data
+
+# This function is already present in shipment_prep.py
 clean, medians = clean_shipments(raw)
 
 print("Clean rows:", len(clean))
 print("Medians:", medians)
 
+service_types_after = clean["service_type"].nunique()
 
-# --------------------------------------------------
-# STEP 4: Merge hubs and build features
-# --------------------------------------------------
+
+# STEP 6: Add hub information and new features
 
 model_df = build_features(clean, hubs)
 
 print("Rows after hub merge:", len(model_df))
-print("Feature columns:", model_df.columns.tolist())
 
 
-# --------------------------------------------------
-# STEP 5: Validate the modelling table
-# --------------------------------------------------
-
-assert len(raw) == 1224, "Unexpected raw row count"
-assert len(clean) == 1200, "Unexpected clean row count"
-assert len(model_df) == 1200, "Unexpected merged row count"
-
-assert model_df["shipment_id"].is_unique, (
-    "Duplicate shipment IDs found"
-)
-
-assert model_df["parcel_weight_kg"].notna().all(), (
-    "Missing parcel weights remain"
-)
-
-assert model_df["delivery_hours"].notna().all(), (
-    "Missing delivery_hours values found"
-)
-
-assert model_df["promised_hours"].notna().all(), (
-    "Missing promised_hours values found"
-)
-
-print("All validation checks passed.")
-
-
-# --------------------------------------------------
-# STEP 6: Create the modelling table
-# --------------------------------------------------
-
-model_df.to_csv(
-    DATA_DIR / "modelling_table.csv",
-    index=False
-)
-
-print("Saved: data/modelling_table.csv")
-
-
-# --------------------------------------------------
 # STEP 7: Create the delay target
-# --------------------------------------------------
 
-# A parcel is delayed when actual delivery time
-# exceeds its promised delivery time.
+# 1 means delayed
+# 0 means delivered within the promised time
 
 model_df["is_delayed"] = (
-    model_df["delivery_hours"]
-    > model_df["promised_hours"]
+    model_df["delivery_hours"] > model_df["promised_hours"]
 ).astype(int)
 
-model_df["delay_hours"] = (
-    model_df["delivery_hours"]
-    - model_df["promised_hours"]
-).clip(lower=0)
+
+# STEP 8: Check the required columns
+
+# These are the 17 feature columns specified in the assignment
+features = [
+    "service_type",
+    "payment_mode",
+    "parcel_weight_kg",
+    "distance_km",
+    "n_stops",
+    "rain_flag",
+    "sale_event_flag",
+    "dispatch_time",
+    "hub_city",
+    "region",
+    "hub_tier",
+    "hub_daily_capacity",
+    "promised_hours",
+    "is_cod",
+    "is_weekend",
+    "dispatch_hour",
+    "log_declared_value",
+]
+
+# Add the two columns that contain the actual delivery result
+features_and_target = features + [
+    "delivery_hours",
+    "is_delayed",
+]
+
+# Count all missing cells in these 19 columns
+null_count = model_df[features_and_target].isna().sum().sum()
+
+print("Missing values in features and target:", null_count)
+
+# Stop if a required value is missing
+assert null_count == 0, "Missing values found in required columns"
+
+assert len(model_df) == 1200, "Expected 1200 rows"
+
+assert model_df["shipment_id"].is_unique, "Duplicate shipment IDs found"
 
 
-# --------------------------------------------------
-# STEP 8: Analyse delays by service type
-# --------------------------------------------------
+# STEP 9: Save the modelling table
 
-delay_by_service = (
-    model_df.groupby("service_type")
-    .agg(
-        shipment_count=("shipment_id", "count"),
-        avg_delivery_hours=("delivery_hours", "mean"),
-        avg_promised_hours=("promised_hours", "mean"),
-        delayed_shipments=("is_delayed", "sum"),
-        avg_delay_hours=("delay_hours", "mean"),
-    )
-    .reset_index()
-)
-
-delay_by_service["delay_rate_pct"] = (
-    delay_by_service["delayed_shipments"]
-    / delay_by_service["shipment_count"]
-    * 100
-)
-
-delay_by_service.to_csv(
-    OUTPUT_DIR / "delay_by_service.csv",
+model_df.to_csv(
+    data_folder / "modelling_table.csv",
     index=False
 )
 
-print("\nDelay analysis by service:")
-print(delay_by_service.round(2))
+print("Modelling table saved.")
 
 
-# --------------------------------------------------
-# STEP 9: Calculate numerical correlations
-# --------------------------------------------------
+# STEP 10: Calculate delay statistics
 
-numeric_df = model_df.select_dtypes(
-    include="number"
+delayed_count = model_df["is_delayed"].sum()
+
+delay_rate = model_df["is_delayed"].mean()
+
+print("Delayed shipments:", delayed_count)
+print("Delay rate:", round(delay_rate, 4))
+
+
+# STEP 11: Calculate delivery-hour outliers
+
+q1 = model_df["delivery_hours"].quantile(0.25)
+q3 = model_df["delivery_hours"].quantile(0.75)
+
+iqr = q3 - q1
+
+lower_bound = q1 - 1.5 * iqr
+upper_bound = q3 + 1.5 * iqr
+
+outlier_count = (
+    (model_df["delivery_hours"] < lower_bound)
+    | (model_df["delivery_hours"] > upper_bound)
+).sum()
+
+
+# STEP 12: Calculate declared-value statistics
+
+value_mean = model_df["declared_value_inr"].mean()
+value_median = model_df["declared_value_inr"].median()
+
+log_value_mean = model_df["log_declared_value"].mean()
+log_value_median = model_df["log_declared_value"].median()
+
+
+# STEP 13: Create the checks file
+
+# Each row contains one metric name and its calculated value
+
+checks = pd.DataFrame({
+    "metric": [
+        "raw_rows",
+        "duplicate_rows_removed",
+        "rows_after_dedup",
+        "missing_distance_km_before",
+        "missing_parcel_weight_before",
+        "sentinel_weight_rows",
+        "missing_declared_value_before",
+        "missing_payment_mode_before",
+        "service_type_spellings_before",
+        "service_type_spellings_after",
+        "median_distance_km",
+        "median_parcel_weight_kg",
+        "median_declared_value_inr",
+        "rows_after_hub_merge",
+        "nulls_in_features_and_target",
+        "delayed_count",
+        "delay_rate",
+        "hours_q1",
+        "hours_q3",
+        "hours_lower_bound",
+        "hours_upper_bound",
+        "hours_outlier_count",
+        "declared_value_mean_inr",
+        "declared_value_median_inr",
+        "log_declared_value_mean",
+        "log_declared_value_median",
+    ],
+
+    "value": [
+        len(raw),
+        duplicate_rows_removed,
+        len(raw_without_duplicates),
+        missing_distance_before,
+        missing_weight_before,
+        sentinel_rows,
+        missing_value_before,
+        missing_payment_before,
+        service_types_before,
+        service_types_after,
+        medians["distance_km"],
+        medians["parcel_weight_kg"],
+        medians["declared_value_inr"],
+        len(model_df),
+        null_count,
+        delayed_count,
+        round(delay_rate, 4),
+        round(q1, 2),
+        round(q3, 2),
+        round(lower_bound, 2),
+        round(upper_bound, 2),
+        outlier_count,
+        round(value_mean, 2),
+        round(value_median, 2),
+        round(log_value_mean, 3),
+        round(log_value_median, 3),
+    ]
+})
+
+checks.to_csv(
+    output_folder / "part_a_checks.csv",
+    index=False
 )
 
-correlation_matrix = numeric_df.corr()
+print("Checks file saved.")
 
-correlation_matrix.to_csv(
-    OUTPUT_DIR / "correlations.csv"
+
+# STEP 14: Create the delay evidence table
+
+# Create the distance groups
+model_df["distance_band"] = pd.cut(
+    model_df["distance_km"],
+    bins=[0, 200, 400, 600, 2000],
+    labels=["0-200", "201-400", "401-600", "601+"],
+    right=True
 )
 
-print("\nCorrelations with delivery_hours:")
-
-print(
-    correlation_matrix["delivery_hours"]
-    .sort_values(ascending=False)
-    .round(3)
-)
-
-
-# --------------------------------------------------
-# STEP 10: Save a project validation summary
-# --------------------------------------------------
-
-summary = pd.DataFrame(
-    [
-        {
-            "check": "Raw shipment rows",
-            "value": len(raw),
-        },
-        {
-            "check": "Clean shipment rows",
-            "value": len(clean),
-        },
-        {
-            "check": "Merged modelling rows",
-            "value": len(model_df),
-        },
-        {
-            "check": "Unique shipment IDs",
-            "value": model_df["shipment_id"].nunique(),
-        },
-        {
-            "check": "Missing parcel weights",
-            "value": model_df["parcel_weight_kg"].isna().sum(),
-        },
-        {
-            "check": "Missing delivery hours",
-            "value": model_df["delivery_hours"].isna().sum(),
-        },
+# Create an empty table to collect the results
+delay_results = pd.DataFrame(
+    columns=[
+        "dimension",
+        "group",
+        "shipments",
+        "delayed",
+        "delay_rate",
+        "mean_hours",
     ]
 )
 
-summary.to_csv(
-    OUTPUT_DIR / "part_a_validation.csv",
+
+# Analyse service type, hub tier and distance band
+for column in ["service_type", "hub_tier", "distance_band"]:
+
+    grouped = model_df.groupby(column, observed=True)
+
+    # Count shipments in each group
+    shipments = grouped["shipment_id"].count()
+
+    # Count delayed shipments in each group
+    delayed = grouped["is_delayed"].sum()
+
+    # Calculate the percentage of delayed shipments
+    rates = grouped["is_delayed"].mean()
+
+    # Calculate average delivery hours
+    average_hours = grouped["delivery_hours"].mean()
+
+    # Put the results into a table
+    result = pd.DataFrame({
+        "dimension": column,
+        "group": shipments.index.astype(str),
+        "shipments": shipments.values,
+        "delayed": delayed.values,
+        "delay_rate": rates.values,
+        "mean_hours": average_hours.values,
+    })
+
+    # Add these results to the main table
+    delay_results = pd.concat(
+        [delay_results, result],
+        ignore_index=True
+    )
+
+
+# Round delay rates to four decimal places
+delay_results["delay_rate"] = delay_results["delay_rate"].round(4)
+
+# Save the file
+delay_results.to_csv(
+    output_folder / "part_a_delay_by_group.csv",
     index=False
 )
 
-print("\nPart A completed successfully.")
-print("Check the data/ and outputs/ folders.")
-print("=" * 45)
+print("Delay evidence file saved.")
+
+
+# STEP 15: Create the correlation matrix
+
+# Select only numerical columns
+numeric_data = model_df.select_dtypes(include="number")
+
+# Calculate correlations
+correlations = numeric_data.corr()
+
+# Save row names in the first column
+correlations.to_csv(
+    output_folder / "part_a_correlations.csv",
+    index_label="column"
+)
+
+print("Correlation file saved.")
+
+
+# STEP 16: Finish
+
+print()
+print("====================================")
+print("PART A SCRIPT FINISHED")
+print("====================================")
+print("Modelling table:", len(model_df), "rows")
+print("Delayed shipments:", delayed_count)
+print("Delay rate:", round(delay_rate, 4))
+print("Please compare the CSV outputs with the reference values.")
