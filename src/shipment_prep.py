@@ -63,6 +63,7 @@ def clean_shipments(raw, medians=None):
 
     # Step 8: Fill missing values using the chosen medians.
     for col in median_columns:
+        clean_df[col] = clean_df[col].astype("Float64")
         clean_df[col] = clean_df[col].fillna(medians[col])
 
     return clean_df, medians
