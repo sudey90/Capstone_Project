@@ -1,9 +1,12 @@
-"""Synthetic shipment data for the Delay Intelligence capstone.
+"""Synthetic shipment data using NumPy and the standard library only.
 Run once:  python generate_data.py   (writes data/hubs.csv, data/raw_shipments.csv, data/new_shipments.csv)
 Do not edit any constant: every number in the brief was measured on this exact output."""
+import csv
 import os
+from datetime import datetime, timedelta
+
 import numpy as np
-import pandas as pd
+
 HUBS = [
     ("HUB01", "Mumbai", "West", 1, 1500), ("HUB02", "Delhi", "North", 1, 1600),
     ("HUB03", "Bengaluru", "South", 1, 1450), ("HUB04", "Hyderabad", "South", 1, 1350),
@@ -25,16 +28,28 @@ HUB_EFFECT = [0, 2, 4]         # extra hours for hub tier 1 / 2 / 3
 # How a hub really operates (1 = metro-like, 2 = regional, 3 = stretched). Four hubs operate unlike their tier label.
 OPERATING_TIER = {"HUB07": 2, "HUB13": 3, "HUB15": 3, "HUB22": 2}
 BASE_HOURS = {"Express": 10, "Standard": 28, "Economy": 58}
+SHIPMENT_COLUMNS = [
+    "shipment_id", "hub_id", "service_type", "payment_mode", "parcel_weight_kg",
+    "distance_km", "declared_value", "n_stops", "rain_flag", "sale_event_flag",
+    "dispatch_time", "label_print_batch", "scanner_build_no", "tape_roll_no",
+    "sticker_serial_mod", "shelf_slot_no", "delivery_hours",
+]
+
+
+def write_csv(path, columns, rows):
+    with open(path, "w", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file, lineterminator="\n")
+        writer.writerow(columns)
+        writer.writerows([[row.get(column) for column in columns] for row in rows])
 
 
 def simulate(n_per_hub, seed):
     """Clean shipments, n_per_hub rows for each of the 24 hubs, in hub order."""
     np.random.seed(seed)
-    hubs = pd.DataFrame(HUBS, columns=["hub_id", "hub_city", "region", "hub_tier", "hub_daily_capacity"])
-    n = n_per_hub * len(hubs)
-    op_tier = [OPERATING_TIER.get(h, t) for h, t in zip(hubs["hub_id"], hubs["hub_tier"])]
+    n = n_per_hub * len(HUBS)
+    op_tier = [OPERATING_TIER.get(hub_id, tier) for hub_id, _, _, tier, _ in HUBS]
     tier = np.repeat(op_tier, n_per_hub) - 1
-    hub_id = np.repeat(hubs["hub_id"].values, n_per_hub)
+    hub_id = np.repeat([hub[0] for hub in HUBS], n_per_hub)
     distance = np.clip(np.random.normal(np.array(DIST_MU)[tier], np.array(DIST_SD)[tier]), 15, 1500).round(1)
     stops = np.clip(np.random.normal(np.array(STOPS_MU)[tier], 10), 20, 140).round().astype(int)
     weight = np.clip(np.random.lognormal(0.6, 0.7, n), 0.1, 40).round(2)
@@ -45,59 +60,72 @@ def simulate(n_per_hub, seed):
     day = np.random.randint(0, 90, n)
     hour = np.random.randint(6, 22, n)
     minute = np.random.randint(0, 60, n)
-    ts = pd.Timestamp("2026-07-01") + pd.to_timedelta(day, unit="D") + pd.to_timedelta(hour * 60 + minute, unit="m")
-    sale = ((ts >= pd.Timestamp("2026-09-15")) & (ts < pd.Timestamp("2026-09-29"))).astype(int)
-    weekend = (ts.dayofweek >= 5).astype(int)
+    ts = [
+        datetime(2026, 7, 1) + timedelta(days=int(d), minutes=int(h * 60 + m))
+        for d, h, m in zip(day, hour, minute)
+    ]
+    sale = np.array([int(datetime(2026, 9, 15) <= value < datetime(2026, 9, 29)) for value in ts])
+    weekend = np.array([int(value.weekday() >= 5) for value in ts])
     hours = (np.array([BASE_HOURS[s] for s in service]) + 0.03 * distance + 0.10 * stops
              + np.array(HUB_EFFECT)[tier] + 0.12 * weight + 4 * rain + 7 * sale
              + 3 * (pay == "COD") + 2 * weekend + 3 * (hour >= 18)
              + 12 * sale * (service == "Express") + 8 * (distance > 400) * rain
              + np.random.normal(0, 4, n)).round(2)
-    return pd.DataFrame({
-        "hub_id": hub_id, "service_type": service, "payment_mode": pay,
-        "parcel_weight_kg": weight, "distance_km": distance, "declared_value": value,
-        "n_stops": stops, "rain_flag": rain, "sale_event_flag": sale, "dispatch_time": ts,
-        "label_print_batch": np.random.randint(1000, 9999, n),
-        "scanner_build_no": np.random.randint(1, 40, n),
-        "tape_roll_no": np.random.randint(1, 500, n),
-        "sticker_serial_mod": np.random.uniform(0, 1, n).round(3),
-        "shelf_slot_no": np.random.randint(1, 300, n),
-        "delivery_hours": hours,
-    })
+    label_print_batch = np.random.randint(1000, 9999, n)
+    scanner_build_no = np.random.randint(1, 40, n)
+    tape_roll_no = np.random.randint(1, 500, n)
+    sticker_serial_mod = np.random.uniform(0, 1, n).round(3)
+    shelf_slot_no = np.random.randint(1, 300, n)
+    return [
+        {
+            "hub_id": hub_id[i], "service_type": service[i], "payment_mode": pay[i],
+            "parcel_weight_kg": weight[i], "distance_km": distance[i], "declared_value": value[i],
+            "n_stops": stops[i], "rain_flag": rain[i], "sale_event_flag": sale[i],
+            "dispatch_time": ts[i], "label_print_batch": label_print_batch[i],
+            "scanner_build_no": scanner_build_no[i], "tape_roll_no": tape_roll_no[i],
+            "sticker_serial_mod": sticker_serial_mod[i], "shelf_slot_no": shelf_slot_no[i],
+            "delivery_hours": hours[i],
+        }
+        for i in range(n)
+    ]
 
 
-def make_messy(df, seed, n_missing, n_case, n_sentinel, n_dupes, id_start):
+def make_messy(rows, seed, n_missing, n_case, n_sentinel, n_dupes, id_start):
     """Turn a clean table into a raw export: text columns, gaps, duplicates, a sentinel."""
     np.random.seed(seed)
-    df = df.sample(frac=1.0, random_state=seed).reset_index(drop=True)
-    n = len(df)
-    df.insert(0, "shipment_id", ["SHP" + str(id_start + i) for i in range(n)])
-    df["dispatch_time"] = df["dispatch_time"].dt.strftime("%Y-%m-%d %H:%M")
-    df["declared_value"] = df["declared_value"].map(lambda v: "\u20b9" + format(v, ","))
+    sample_order = np.random.RandomState(seed).choice(len(rows), len(rows), replace=False)
+    rows = [rows[i] for i in sample_order]
+    n = len(rows)
+    for i, row in enumerate(rows):
+        row["shipment_id"] = "SHP" + str(id_start + i)
+        row["dispatch_time"] = row["dispatch_time"].strftime("%Y-%m-%d %H:%M")
+        row["declared_value"] = "\u20b9" + format(row["declared_value"], ",")
     for col, k in [("distance_km", n_missing[0]), ("parcel_weight_kg", n_missing[1]),
                    ("declared_value", n_missing[2]), ("payment_mode", n_missing[3])]:
-        df.loc[np.random.choice(n, k, replace=False), col] = np.nan
+        for i in np.random.choice(n, k, replace=False):
+            rows[i][col] = None
     pick = np.random.choice(n, n_case, replace=False)
     shapes = np.random.randint(0, 3, n_case)
     for i, s in zip(pick, shapes):
-        v = df.at[i, "service_type"]
-        df.at[i, "service_type"] = [v.upper(), v.lower(), "  " + v + " "][s]
+        v = rows[i]["service_type"]
+        rows[i]["service_type"] = [v.upper(), v.lower(), "  " + v + " "][s]
     if n_sentinel:
-        df.loc[np.random.choice(n, n_sentinel, replace=False), "parcel_weight_kg"] = 999.0
+        for i in np.random.choice(n, n_sentinel, replace=False):
+            rows[i]["parcel_weight_kg"] = 999.0
     if n_dupes:
-        df = pd.concat([df, df.iloc[np.random.choice(n, n_dupes, replace=False)]], ignore_index=True)
-    return df
+        rows.extend(rows[i].copy() for i in np.random.choice(n, n_dupes, replace=False))
+    return rows
 
 
 if __name__ == "__main__":
     os.makedirs("data", exist_ok=True)
-    hubs = pd.DataFrame(HUBS, columns=["hub_id", "hub_city", "region", "hub_tier", "hub_daily_capacity"])
-    hubs.to_csv("data/hubs.csv", index=False)
+    hub_columns = ["hub_id", "hub_city", "region", "hub_tier", "hub_daily_capacity"]
+    hubs = [dict(zip(hub_columns, hub)) for hub in HUBS]
+    write_csv("data/hubs.csv", hub_columns, hubs)
     raw = make_messy(simulate(50, 2604), seed=7, n_missing=(36, 24, 12, 18),
                      n_case=120, n_sentinel=5, n_dupes=24, id_start=10001)
-    raw.to_csv("data/raw_shipments.csv", index=False)
+    write_csv("data/raw_shipments.csv", SHIPMENT_COLUMNS, raw)
     new = make_messy(simulate(2, 99), seed=8, n_missing=(3, 2, 1, 2),
                      n_case=6, n_sentinel=0, n_dupes=0, id_start=90001)
-    new = new.drop(columns=["delivery_hours"])
-    new.to_csv("data/new_shipments.csv", index=False)
+    write_csv("data/new_shipments.csv", SHIPMENT_COLUMNS[:-1], new)
     print(len(hubs), len(raw), len(new))
