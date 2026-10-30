@@ -1,50 +1,29 @@
-"""
-PART B: DELIVERY-HOURS REGRESSION
+"""PART B: DELIVERY-HOURS REGRESSION
 
-Goal:
-Predict how many hours a shipment will take to reach the customer.
-
-Input:
-    data/modelling_table.csv  (created in Part A)
-
-Important assumptions:
-    n_stops is the planned number of delivery stops.
-    rain_flag is the weather forecast available at dispatch time.
-
-Files created for later tasks:
-    data/modeling_features.csv
-    models/delivery_hours_model.pkl
-
-Other results are saved in the outputs folder.
+Uses the exact 17 FEATURES in the assignment and predicts delivery_hours.
+Input: data/modelling_table.csv
 """
 
 # ============================================================
-# STEP 1: IMPORT THE LIBRARIES
+# STEP 1: IMPORT LIBRARIES
 # ============================================================
-
 from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
 
 from sklearn.model_selection import train_test_split, KFold, cross_val_score
-from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from sklearn.base import clone
-
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 
 # ============================================================
-# STEP 2: SET UP PROJECT FOLDERS
+# STEP 2: SET UP PROJECT FOLDERS AND READ PART A DATA
 # ============================================================
-
 PROJECT_FOLDER = Path(__file__).resolve().parent
 DATA_FOLDER = PROJECT_FOLDER / "data"
 OUTPUT_FOLDER = PROJECT_FOLDER / "outputs"
@@ -53,102 +32,49 @@ MODEL_FOLDER = PROJECT_FOLDER / "models"
 OUTPUT_FOLDER.mkdir(exist_ok=True)
 MODEL_FOLDER.mkdir(exist_ok=True)
 
-# Read the cleaned dataset created in Part A.
 df = pd.read_csv(DATA_FOLDER / "modelling_table.csv")
-
 print("Dataset loaded successfully.")
 print("Number of shipments:", len(df))
 
 
 # ============================================================
-# STEP 3: PREPARE THE DATE AND TIME FEATURES
+# STEP 3: SELECT THE EXACT 17 FEATURES IN THE REQUIRED ORDER
 # ============================================================
-
-# Convert dispatch_time from text into a proper date/time value.
-df["dispatch_time"] = pd.to_datetime(df["dispatch_time"], errors="coerce")
-
-if df["dispatch_time"].isna().any():
-    raise ValueError("Some dispatch_time values are missing or invalid.")
-
-# Extract useful information from the dispatch date.
-df["dispatch_day"] = df["dispatch_time"].dt.day
-df["dispatch_month"] = df["dispatch_time"].dt.month
-df["dispatch_weekday"] = df["dispatch_time"].dt.dayofweek
-
-# A clock repeats every 24 hours. Sine and cosine represent this cycle:
-# 23:00 and 00:00 are therefore treated as neighbouring times.
-hour = df["dispatch_time"].dt.hour + df["dispatch_time"].dt.minute / 60
-df["dispatch_hour_sin"] = np.sin(2 * np.pi * hour / 24)
-df["dispatch_hour_cos"] = np.cos(2 * np.pi * hour / 24)
-
-
-# ============================================================
-# STEP 4: CHOOSE THE INPUT COLUMNS AND THE ANSWER TO PREDICT
-# ============================================================
-
-# These columns contain information available when the shipment is dispatched.
-# We do NOT include delivery_hours here because that is what we want to predict.
-
-feature_columns = [
-    "service_type",
-    "payment_mode",
-    "parcel_weight_kg",
-    "distance_km",
-    "n_stops",
-    "rain_flag",
-    "sale_event_flag",
-    "hub_city",
-    "region",
-    "hub_tier",
-    "hub_daily_capacity",
-    "promised_hours",
-    "is_cod",
-    "is_weekend",
-    "dispatch_day",
-    "dispatch_month",
-    "dispatch_weekday",
-    "dispatch_hour_sin",
-    "dispatch_hour_cos",
-    "log_declared_value",
+FEATURES = [
+    "promised_hours", "distance_km", "parcel_weight_kg", "log_declared_value", "n_stops",
+    "rain_flag", "sale_event_flag", "is_cod", "is_weekend", "dispatch_hour",
+    "hub_tier", "hub_daily_capacity",
+    "label_print_batch", "scanner_build_no", "tape_roll_no", "sticker_serial_mod", "shelf_slot_no",
 ]
+TARGET = "delivery_hours"
 
-# Check that all required input columns exist.
-for column in feature_columns:
+for column in FEATURES + [TARGET]:
     if column not in df.columns:
         raise ValueError("Required column is missing: " + column)
 
-# X = information given to the model.
-# y = correct delivery time that the model must learn to predict.
-X = df[feature_columns].copy()
-y = df["delivery_hours"].copy()
+X = df[FEATURES].copy()
+y = df[TARGET].copy()
 
+if X.isna().any().any():
+    raise ValueError("One or more of the 17 FEATURES contain missing values.")
 if y.isna().any():
     raise ValueError("delivery_hours contains missing values.")
 
-# Save the feature-engineered dataset for Parts C and D.
-# It keeps delivery_hours and is_delayed because later tasks need them.
+# Keep the full feature-engineered Part A table for Parts C and D.
 df.to_csv(DATA_FOLDER / "modeling_features.csv", index=False)
-
-# Save the list of features used by the regression model.
-pd.DataFrame({"feature": feature_columns}).to_csv(
+pd.DataFrame({"feature": FEATURES}).to_csv(
     OUTPUT_FOLDER / "part_b_feature_columns.csv", index=False
 )
 
 
 # ============================================================
-# STEP 5: SPLIT THE DATA INTO TRAINING, VALIDATION AND TEST SETS
+# STEP 4: SPLIT INTO TRAINING, VALIDATION AND TEST SETS
 # ============================================================
-
-# Training data (70%): teaches the models.
-# Validation data (15%): helps us compare and select a model.
-# Test data (15%): gives the final performance on unseen shipments.
-
-X_train, X_temp, y_train, y_temp = train_test_split(
+X_train, X_temporary, y_train, y_temporary = train_test_split(
     X, y, test_size=0.30, random_state=42
 )
-
 X_validation, X_test, y_validation, y_test = train_test_split(
-    X_temp, y_temp, test_size=0.50, random_state=42
+    X_temporary, y_temporary, test_size=0.50, random_state=42
 )
 
 print("\nData split completed:")
@@ -156,410 +82,286 @@ print("Training rows:", len(X_train))
 print("Validation rows:", len(X_validation))
 print("Test rows:", len(X_test))
 
+if (len(X_train), len(X_validation), len(X_test)) != (840, 180, 180):
+    raise ValueError("Split sizes must be exactly 840 / 180 / 180.")
+
 
 # ============================================================
-# STEP 6: PREPARE CATEGORICAL AND NUMERIC COLUMNS
+# STEP 5: SCALING CHECK - FIT ONLY ON TRAINING ROWS
 # ============================================================
+# Fit the scaler on training data only. Then use that fitted scaler
+# to transform validation and test data. Never fit on validation/test.
+scaler_check = StandardScaler()
+X_train_scaled = scaler_check.fit_transform(X_train)
+X_validation_scaled = scaler_check.transform(X_validation)
+X_test_scaled = scaler_check.transform(X_test)
 
-# Categorical columns contain names or labels.
-# Example: Express, Standard, Economy, Kolkata, etc.
-categorical_columns = [
-    "service_type",
-    "payment_mode",
-    "hub_city",
-    "region",
-]
+train_scaled_max_abs_mean = np.abs(X_train_scaled.mean(axis=0)).max()
+test_scaled_max_abs_mean = np.abs(X_test_scaled.mean(axis=0)).max()
 
-# All remaining input columns are numeric.
-numeric_columns = [
-    column for column in feature_columns
-    if column not in categorical_columns
-]
-
-# Numeric preparation:
-# 1. Fill missing numeric values using the median.
-# 2. Standardize numeric values so they are on comparable scales.
-numeric_preparation = Pipeline(steps=[
-    ("fill_missing", SimpleImputer(strategy="median")),
-    ("scale", StandardScaler()),
+checks_df = pd.DataFrame([
+    {"metric": "train_rows", "value": len(X_train)},
+    {"metric": "val_rows", "value": len(X_validation)},
+    {"metric": "test_rows", "value": len(X_test)},
+    {"metric": "train_scaled_max_abs_mean", "value": train_scaled_max_abs_mean},
+    {"metric": "test_scaled_max_abs_mean", "value": test_scaled_max_abs_mean},
 ])
-
-# Categorical preparation:
-# 1. Fill missing labels using the most common value.
-# 2. Convert labels into numeric columns (One-Hot Encoding).
-categorical_preparation = Pipeline(steps=[
-    ("fill_missing", SimpleImputer(strategy="most_frequent")),
-    ("convert_to_numbers", OneHotEncoder(handle_unknown="ignore")),
-])
-
-# Apply the correct preparation to each type of column.
-preparation = ColumnTransformer(transformers=[
-    ("numeric", numeric_preparation, numeric_columns),
-    ("categorical", categorical_preparation, categorical_columns),
-])
+checks_df.to_csv(OUTPUT_FOLDER / "part_b_checks.csv", index=False)
+print("\nScaling checks:")
+print(checks_df.to_string(index=False))
 
 
 # ============================================================
-# STEP 7: CREATE A SMALL HELPER TO BUILD A MODEL PIPELINE
+# STEP 6: CREATE A FUNCTION TO CALCULATE REGRESSION METRICS
 # ============================================================
-
-# A pipeline performs data preparation first and model training second.
-# This also ensures that preprocessing is learned only from the training
-# portion of each split or cross-validation fold.
-
-def create_model(regression_algorithm):
-    return Pipeline(steps=[
-        ("preparation", clone(preparation)),
-        ("regression_model", regression_algorithm),
-    ])
-
-
-# ============================================================
-# STEP 8: CREATE A FUNCTION TO CALCULATE MODEL PERFORMANCE
-# ============================================================
-
-def calculate_metrics(actual_values, predicted_values):
-    mae = mean_absolute_error(actual_values, predicted_values)
-    mse = mean_squared_error(actual_values, predicted_values)
-    rmse = np.sqrt(mse)
-    r2 = r2_score(actual_values, predicted_values)
-
+def calculate_metrics(actual, predicted):
+    mse = mean_squared_error(actual, predicted)
     return {
-        "MAE": mae,
+        "MAE": mean_absolute_error(actual, predicted),
         "MSE": mse,
-        "RMSE": rmse,
-        "R2": r2,
+        "RMSE": np.sqrt(mse),
+        "R2": r2_score(actual, predicted),
     }
 
 
 # ============================================================
-# STEP 9: CREATE A SIMPLE BASELINE
+# STEP 7: BASELINE - ALWAYS PREDICT THE TRAINING MEAN
 # ============================================================
-
-# Baseline means a very simple model for comparison.
-# It always predicts the average delivery time from the training data.
-
-average_delivery_time = y_train.mean()
-
-baseline_predictions = np.repeat(average_delivery_time, len(y_validation))
-baseline_results = calculate_metrics(y_validation, baseline_predictions)
-
+training_mean = y_train.mean()
+baseline_predictions = np.repeat(training_mean, len(y_validation))
+baseline_metrics = calculate_metrics(y_validation, baseline_predictions)
 print("\nBaseline results (validation data):")
-print(pd.Series(baseline_results).round(3))
+print(pd.Series(baseline_metrics).round(3))
 
 
 # ============================================================
-# STEP 10: FIND A SUITABLE DECISION TREE DEPTH
+# STEP 8: DECISION TREE DEPTH DIAGNOSTIC
 # ============================================================
-
-# A shallow tree may be too simple.
-# A very deep tree may memorize the training data.
-# We compare several depths and choose the one with the lowest validation RMSE.
-
-tree_depths = [1, 2, 3, 4, 6, 8, 12, None]
-
-tree_results = []
+depths_to_try = [1, 2, 3, 4, 6, 8, 12, None]
+tree_rows = []
 tree_models = {}
 
-for depth in tree_depths:
-
-    tree = create_model(
-        DecisionTreeRegressor(max_depth=depth, random_state=42)
-    )
-
+for depth in depths_to_try:
+    tree = DecisionTreeRegressor(max_depth=depth, random_state=42)
     tree.fit(X_train, y_train)
 
-    train_predictions = tree.predict(X_train)
-    validation_predictions = tree.predict(X_validation)
+    train_prediction = tree.predict(X_train)
+    validation_prediction = tree.predict(X_validation)
+    train_rmse = np.sqrt(mean_squared_error(y_train, train_prediction))
+    validation_rmse = np.sqrt(mean_squared_error(y_validation, validation_prediction))
 
-    train_rmse = calculate_metrics(y_train, train_predictions)["RMSE"]
-    validation_metrics = calculate_metrics(y_validation, validation_predictions)
-
-    depth_name = str(depth)
-    tree_models[depth_name] = tree
-
-    tree_results.append({
-        "tree_depth": depth_name,
-        "training_RMSE": train_rmse,
-        "validation_RMSE": validation_metrics["RMSE"],
-        "validation_MAE": validation_metrics["MAE"],
-        "validation_R2": validation_metrics["R2"],
+    depth_label = "unlimited" if depth is None else depth
+    tree_rows.append({
+        "max_depth": depth_label,
+        "train_rmse": train_rmse,
+        "val_rmse": validation_rmse,
     })
+    tree_models[depth_label] = tree
 
-tree_results_df = pd.DataFrame(tree_results)
-tree_results_df.to_csv(OUTPUT_FOLDER / "part_b_tree_depth.csv", index=False)
+tree_depth_df = pd.DataFrame(tree_rows)
+tree_depth_df.to_csv(OUTPUT_FOLDER / "part_b_tree_depth.csv", index=False)
 
-# Select the tree with the lowest validation RMSE.
-best_tree_row = tree_results_df["validation_RMSE"].idxmin()
-best_tree_depth = tree_results_df.loc[best_tree_row, "tree_depth"]
+# idxmin returns the first minimum. Since depths are in ascending order,
+# a tie is resolved in favour of the smaller depth.
+best_tree_index = tree_depth_df["val_rmse"].idxmin()
+best_tree_depth = tree_depth_df.loc[best_tree_index, "max_depth"]
 best_tree = tree_models[best_tree_depth]
 
 print("\nDecision Tree depth comparison:")
-print(tree_results_df.round(3).to_string(index=False))
+print(tree_depth_df.round(3).to_string(index=False))
 print("Best tree depth:", best_tree_depth)
 
 
 # ============================================================
-# STEP 11: TRAIN AND COMPARE FOUR REGRESSION MODELS
+# STEP 9: TRAIN THE FOUR REQUIRED CANDIDATE MODELS
 # ============================================================
-
-# We compare different algorithms to find which predicts delivery time best.
-
+# Linear Regression uses the specifically required scaler pipeline.
+# Tree models do not need feature scaling.
 models = {
-    "Linear Regression": create_model(LinearRegression()),
-    "Decision Tree": best_tree,
-    "Random Forest": create_model(
-        RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+    "linear_regression": Pipeline(steps=[
+        ("scaler", StandardScaler()),
+        ("model", LinearRegression()),
+    ]),
+    "decision_tree": best_tree,
+    "random_forest": RandomForestRegressor(
+        n_estimators=100, random_state=42
     ),
-    "Gradient Boosting": create_model(
-        GradientBoostingRegressor(
-            n_estimators=100, learning_rate=0.1, random_state=42
-        )
+    "gradient_boosting": GradientBoostingRegressor(
+        n_estimators=100, learning_rate=0.1, random_state=42
     ),
 }
 
-model_results = []
+validation_metrics_by_model = {}
+comparison_rows = []
 
 for model_name, model in models.items():
-
     model.fit(X_train, y_train)
+    validation_predictions = model.predict(X_validation)
+    metrics = calculate_metrics(y_validation, validation_predictions)
+    validation_metrics_by_model[model_name] = metrics
 
-    predictions = model.predict(X_validation)
-    results = calculate_metrics(y_validation, predictions)
-
-    model_results.append({
+    comparison_rows.append({
         "model": model_name,
-        "validation_MAE": results["MAE"],
-        "validation_RMSE": results["RMSE"],
-        "validation_R2": results["R2"],
+        "validation_MAE": metrics["MAE"],
+        "validation_RMSE": metrics["RMSE"],
+        "validation_R2": metrics["R2"],
     })
 
-model_results_df = pd.DataFrame(model_results)
-model_results_df = model_results_df.sort_values("validation_RMSE")
-model_results_df.to_csv(OUTPUT_FOLDER / "part_b_model_comparison.csv", index=False)
-
-print("\nRegression model comparison:")
-print(model_results_df.round(3).to_string(index=False))
+comparison_df = pd.DataFrame(comparison_rows).sort_values("validation_RMSE")
+comparison_df.to_csv(OUTPUT_FOLDER / "part_b_model_comparison.csv", index=False)
+print("\nFour-model validation comparison:")
+print(comparison_df.round(3).to_string(index=False))
 
 
 # ============================================================
-# STEP 12: TRY DIFFERENT GRADIENT BOOSTING LEARNING RATES
+# STEP 10: GRADIENT BOOSTING LEARNING-RATE EXPERIMENT
 # ============================================================
-
-# Learning rate controls how much each new tree contributes.
-# We try three values and select the one with the lowest validation RMSE.
-
-learning_rates = [0.01, 0.1, 1.0]
-learning_rate_results = []
-gradient_boosting_models = {}
-
-for rate in learning_rates:
-
-    gb_model = create_model(
-        GradientBoostingRegressor(
-            n_estimators=100,
-            learning_rate=rate,
-            random_state=42,
-        )
+learning_rate_rows = []
+for rate in [0.01, 0.1, 1.0]:
+    gb_model = GradientBoostingRegressor(
+        n_estimators=100, learning_rate=rate, random_state=42
     )
-
     gb_model.fit(X_train, y_train)
-
     predictions = gb_model.predict(X_validation)
-    results = calculate_metrics(y_validation, predictions)
+    metrics = calculate_metrics(y_validation, predictions)
 
-    learning_rate_results.append({
+    learning_rate_rows.append({
         "learning_rate": rate,
-        "validation_RMSE": results["RMSE"],
-        "validation_MAE": results["MAE"],
-        "validation_R2": results["R2"],
+        "val_rmse": metrics["RMSE"],
+        "val_r2": metrics["R2"],
     })
 
-    gradient_boosting_models[str(rate)] = gb_model
-
-learning_rate_df = pd.DataFrame(learning_rate_results)
-learning_rate_df = learning_rate_df.sort_values("validation_RMSE")
+learning_rate_df = pd.DataFrame(learning_rate_rows)
 learning_rate_df.to_csv(
     OUTPUT_FOLDER / "part_b_gb_learning_rate.csv", index=False
 )
-
-best_rate = str(learning_rate_df.iloc[0]["learning_rate"])
-best_gradient_boosting = gradient_boosting_models[best_rate]
-
 print("\nGradient Boosting learning-rate comparison:")
 print(learning_rate_df.round(3).to_string(index=False))
 
 
-# Add the best Gradient Boosting version to the model comparison.
-models["Best Gradient Boosting"] = best_gradient_boosting
-
-# Compare all candidate models using validation RMSE.
-final_comparison = []
-
-for model_name, model in models.items():
-
-    predictions = model.predict(X_validation)
-    results = calculate_metrics(y_validation, predictions)
-
-    final_comparison.append({
-        "model": model_name,
-        "validation_RMSE": results["RMSE"],
-        "validation_MAE": results["MAE"],
-        "validation_R2": results["R2"],
-    })
-
-final_comparison_df = pd.DataFrame(final_comparison)
-final_comparison_df = final_comparison_df.sort_values("validation_RMSE")
-
-best_model_name = final_comparison_df.iloc[0]["model"]
+# ============================================================
+# STEP 11: SELECT THE BEST OF THE FOUR CANDIDATES
+# ============================================================
+# The assignment says to select the lowest validation RMSE among the
+# four candidates. Do not add a duplicate 'Best Gradient Boosting' model.
+best_model_name = comparison_df.iloc[0]["model"]
 best_model = models[best_model_name]
-
-print("\nFinal model selection:")
-print(final_comparison_df.round(3).to_string(index=False))
-print("Selected model:", best_model_name)
+print("\nSelected model based on validation RMSE:", best_model_name)
 
 
 # ============================================================
-# STEP 13: CHECK THE BEST TWO MODELS USING 5-FOLD CROSS-VALIDATION
+# STEP 12: FIVE-FOLD CROSS-VALIDATION ON TRAIN + VALIDATION
 # ============================================================
-
-# Cross-validation checks whether model performance is consistent
-# across five different splits of the training + validation data.
-# The test data is not used here.
-
 X_train_validation = pd.concat([X_train, X_validation])
 y_train_validation = pd.concat([y_train, y_validation])
 
-top_two_models = final_comparison_df.head(2)["model"].tolist()
+top_two_model_names = comparison_df.head(2)["model"].tolist()
 
-five_folds = KFold(n_splits=5, shuffle=True, random_state=42)
-cross_validation_results = []
+# One KFold object is shared by both models.
+folds = KFold(n_splits=5, shuffle=True, random_state=42)
+cv_rows = []
 
-for model_name in top_two_models:
-
-    model = models[model_name]
-
-    # sklearn returns negative RMSE, so multiply by -1 to get normal RMSE.
+for model_name in top_two_model_names:
+    # No scoring argument: sklearn uses the estimator's default R-squared.
     scores = cross_val_score(
-        model,
+        models[model_name],
         X_train_validation,
         y_train_validation,
-        cv=five_folds,
-        scoring="neg_root_mean_squared_error",
+        cv=folds,
     )
-
-    rmse_scores = -scores
-
-    cross_validation_results.append({
+    cv_rows.append({
         "model": model_name,
-        "average_CV_RMSE": rmse_scores.mean(),
-        "variation_CV_RMSE": rmse_scores.std(),
+        "mean_r2": scores.mean(),
+        "std_r2": scores.std(),
     })
 
-cross_validation_df = pd.DataFrame(cross_validation_results)
-cross_validation_df.to_csv(OUTPUT_FOLDER / "part_b_cv.csv", index=False)
-
-print("\nFive-fold cross-validation:")
-print(cross_validation_df.round(3).to_string(index=False))
-
-
-# ============================================================
-# STEP 14: TRAIN THE SELECTED MODEL USING TRAINING + VALIDATION DATA
-# ============================================================
-
-# We have finished choosing the model.
-# Now we allow it to learn from both training and validation rows.
-# The test data is still kept separate.
-
-final_model = clone(best_model)
-final_model.fit(X_train_validation, y_train_validation)
+cv_df = pd.DataFrame(cv_rows)
+cv_df.to_csv(OUTPUT_FOLDER / "part_b_cv.csv", index=False)
+print("\nFive-fold cross-validation (default R-squared scoring):")
+print(cv_df.round(3).to_string(index=False))
 
 
 # ============================================================
-# STEP 15: EVALUATE THE FINAL MODEL ON TEST DATA
+# STEP 13: TEST THE WINNING MODEL ONCE
 # ============================================================
-
-# This is the final check using data the model has not seen before.
-
-test_predictions = final_model.predict(X_test)
-test_results = calculate_metrics(y_test, test_predictions)
-
+# The winner is already fitted on the 840 training rows.
+# Do not refit it on training + validation for this assignment.
+test_predictions = best_model.predict(X_test)
+test_metrics = calculate_metrics(y_test, test_predictions)
 print("\nFinal test results:")
-print(pd.Series(test_results).round(3))
+print(pd.Series(test_metrics).round(3))
 
 
-# Save the final model metrics.
-metrics_to_save = pd.DataFrame([
-    {
-        "dataset": "Validation baseline",
-        "model": "Average delivery time",
-        **baseline_results,
-    },
-    {
-        "dataset": "Test",
-        "model": best_model_name,
-        **test_results,
-    },
-])
+# ============================================================
+# STEP 14: WRITE THE REQUIRED SIX ROWS TO part_b_metrics.csv
+# ============================================================
+metrics_rows = [{
+    "model": "mean_baseline",
+    "split": "val",
+    **baseline_metrics,
+}]
 
-metrics_to_save.to_csv(OUTPUT_FOLDER / "part_b_metrics.csv", index=False)
+for model_name in [
+    "linear_regression", "decision_tree", "random_forest", "gradient_boosting"
+]:
+    metrics_rows.append({
+        "model": model_name,
+        "split": "val",
+        **validation_metrics_by_model[model_name],
+    })
 
-# Save actual and predicted delivery times for each test shipment.
+metrics_rows.append({
+    "model": best_model_name,
+    "split": "test",
+    **test_metrics,
+})
+
+metrics_df = pd.DataFrame(
+    metrics_rows,
+    columns=["model", "split", "MAE", "MSE", "RMSE", "R2"],
+)
+metrics_df.to_csv(OUTPUT_FOLDER / "part_b_metrics.csv", index=False)
+print("\nRequired Part B metrics:")
+print(metrics_df.round(3).to_string(index=False))
+
+
+# ============================================================
+# STEP 15: SAVE TEST PREDICTIONS
+# ============================================================
 test_predictions_df = pd.DataFrame({
     "actual_delivery_hours": y_test,
     "predicted_delivery_hours": test_predictions,
     "prediction_error_hours": y_test - test_predictions,
     "absolute_error_hours": np.abs(y_test - test_predictions),
 })
-
 test_predictions_df.to_csv(
-    OUTPUT_FOLDER / "part_b_test_predictions.csv",
-    index_label="row_index",
+    OUTPUT_FOLDER / "part_b_test_predictions.csv", index_label="row_index"
 )
 
 
 # ============================================================
-# STEP 16: SAVE THE FINAL MODEL FOR FUTURE PREDICTIONS
+# STEP 16: SAVE THE TRAINED MODEL FOR LATER USE
 # ============================================================
-
-# Save the complete pipeline, not just the regression algorithm.
-# This means future data will receive the same preprocessing automatically.
-
 model_information = {
-    "model": final_model,
-    "feature_columns": feature_columns,
-    "target_column": "delivery_hours",
+    "model": best_model,
+    "feature_columns": FEATURES,
+    "target_column": TARGET,
     "selected_model": best_model_name,
 }
-
-joblib.dump(
-    model_information,
-    MODEL_FOLDER / "delivery_hours_model.pkl",
-)
+joblib.dump(model_information, MODEL_FOLDER / "delivery_hours_model.pkl")
 
 
 # ============================================================
-# STEP 17: PRINT A FINAL SUMMARY
+# STEP 17: FINAL SUMMARY
 # ============================================================
-
-print("\n" + "=" * 55)
-print("PART B COMPLETED SUCCESSFULLY")
-print("=" * 55)
-
+print("\n" + "=" * 58)
+print("PART B COMPLETED")
+print("=" * 58)
 print("Selected regression model:", best_model_name)
-print("Training rows:", len(X_train))
-print("Validation rows:", len(X_validation))
-print("Test rows:", len(X_test))
-
-print("\nFinal test performance:")
-for metric_name, metric_value in test_results.items():
+print("Training / validation / test:", len(X_train), len(X_validation), len(X_test))
+print("Final test performance:")
+for metric_name, metric_value in test_metrics.items():
     print(metric_name + ":", round(metric_value, 4))
-
-print("\nReusable dataset saved at:")
-print(DATA_FOLDER / "modeling_features.csv")
-
-print("\nTrained model saved at:")
-print(MODEL_FOLDER / "delivery_hours_model.pkl")
-
-print("\nAll Part B output files are saved in:")
-print(OUTPUT_FOLDER)
+print("\nOutputs saved in:", OUTPUT_FOLDER)
+print("Reusable dataset:", DATA_FOLDER / "modeling_features.csv")
+print("Trained model:", MODEL_FOLDER / "delivery_hours_model.pkl")
