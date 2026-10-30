@@ -42,3 +42,30 @@ Final test results:
 - **R²:** 0.949
 
 The final model explains approximately 94.9% of the variation in delivery hours on unseen test data.
+
+## Classification — Delayed Shipment Prediction
+
+### 1. Baseline performance
+The baseline model predicted every shipment as on-time. It achieved an accuracy of **76.67%**, but failed to identify any delayed shipments (Recall = 0), making it unsuitable for delay prediction.
+
+### 2. Model comparison
+Three classification models were evaluated. Logistic Regression achieved a validation F1-score of **0.805**, Decision Tree (depth 6) achieved **0.747**, and Random Forest achieved **0.785**. All three performed better than the baseline.
+
+### 3. Feature selection
+Random Forest feature importance and SelectKBest were used to identify the most useful features. The top seven features were distance_km, hub_tier, hub_daily_capacity, n_stops, promised_hours, rain_flag, and sale_event_flag. The five intentionally added noise features together contributed **22.44%** of the Random Forest importance.
+
+### 4. Hyperparameter tuning
+Grid Search evaluated 27 parameter combinations, while Randomized Search evaluated 9 combinations using 5-fold cross-validation. The default Random Forest with seven selected features achieved the highest validation F1-score of **0.833**, so it was selected as the final model.
+
+### 5. Classification threshold
+A threshold of **0.5** was selected because it was the highest tested threshold that maintained validation recall of at least 0.80. Increasing the threshold improves precision but can cause more delayed shipments to be missed.
+
+### 6. Final test performance
+The selected Random Forest model was evaluated once on the unseen test data.
+
+- **Accuracy:** 86.67%
+- **Precision:** 68.89%
+- **Recall:** 75.61%
+- **F1-score:** 0.721
+
+The model achieved better performance than the baseline and successfully identified delayed shipments on unseen data.
