@@ -1,7 +1,124 @@
-# Capstone_Project
+# Capstone_Project#
+
+# Prerequisite Setup and Environment Configuration
+
+## 1. Create the GitHub Repository
+1. Create a new repository on [GitHub](https://github.com/).
+2. Set the repository name to `Capstone_Project` and the owner to `sudey90`.
+3. Enable **Add a README file** and create the repository.
+4. Repository URL: `https://github.com/sudey90/Capstone_Project.git`
+5. Default branch: `main`.
+
+## 2. Install Visual Studio Code and Git
+1. Download and install [Visual Studio Code](https://code.visualstudio.com/).
+2. Install the **Python** and **WSL** extensions published by Microsoft.
+3. Download and install [Git for Windows](https://git-scm.com/).
+4. Verify the installations:
+    code --version
+    git --version
+5. Configure Git:
+    git config --global user.name "Supriyo Dey"
+    git config --global user.email "sudey90@gmail.com"
+
+## 3. Clone the Repository
+1. Create the project parent directory in Windows:
+   `D:\Masai\GitHub_Projects`
+2. Open Command Prompt and execute:
+    cmd
+    cd /d D:\Masai\GitHub_Projects
+    git clone https://github.com/sudey90/Capstone_Project.git
+    cd Capstone_Project
+    code .
+3. Verify the repository:
+    git status
+
+   **Note:** Use the exact repository URL displayed on GitHub. The URL above assumes the repository name is `Capstone_Project`.
+
+## 4. Install WSL and Ubuntu
+The initial Windows Python execution of `generate_data.py` failed with a pandas DLL loading error because a Windows Application Control policy blocked a required component.
+
+To use a Linux environment without replacing Windows:
+1. Open PowerShell as Administrator and execute:
+   wsl --install -d Ubuntu
+2. Restart Windows if requested and complete the initial Ubuntu username and password setup.
+3. Open VS Code and install the Microsoft **WSL** extension if it is not already installed.
+4. Press `Ctrl + Shift + P`, select `WSL: Connect to WSL`, and connect to Ubuntu.
+5. Open the project folder from the WSL-connected VS Code window.
+   The project directory used for this assignment is:
+   `/mnt/d/Masai/Capstone_Project`
+   This corresponds to `D:\Masai\Capstone_Project` in Windows. If the cloned repository is still under `D:\Masai\GitHub_Projects`, use its actual location instead.
+
+## 5. Configure Python in Ubuntu
+Open the VS Code terminal connected to Ubuntu and navigate to the project root:
+cd /mnt/d/Masai/Capstone_Project
+
+If Python, pip or the virtual environment module is missing, install the required Ubuntu packages:
+sudo apt update
+sudo apt install python3 python3-pip python3-venv
+
+Create and activate the virtual environment:
+python3 -m venv .venv
+source .venv/bin/activate
+
+Install the required libraries:
+python -m pip install --upgrade pip
+python -m pip install numpy pandas scipy scikit-learn joblib
+
+Verify the installation:
+python --version
+python -c "import numpy, pandas, scipy, sklearn, joblib; print('All libraries imported successfully')"
+
+Configure Git in Ubuntu if necessary:
+git config --global user.name "Supriyo Dey"
+git config --global user.email "sudey90@gmail.com"
+
+Generate `requirements.txt` from the active virtual environment:
+python -m pip freeze > requirements.txt
+
+## 6. Generate the Initial Dataset
+Ensure that the virtual environment is active and the terminal is in the project root.
+
+Execute:
+python generate_data.py
+
+Expected console output:
+24 1224 48
+
+The script generates the following files inside the `data/` directory:
+- `data/hubs.csv`
+- `data/raw_shipments.csv`
+- `data/new_shipments.csv`
+
+The provided `generate_data.py` script must remain unchanged, and the generated CSV files must not be manually edited.
+
+## 7. Commit and Push Changes to GitHub
+1. Open the **Source Control** panel in VS Code.
+2. Review the modified files and stage the files to be committed.
+3. Enter a meaningful commit message.
+4. Click **Commit**.
+5. Select **Push** from the Source Control menu to upload the committed changes to GitHub.
+6. Verify the changes in the GitHub repository.
+
+git status
+git add requirements.txt
+git commit -m "Add project environment requirements"
+git push
+
+Replace the staged filename with the appropriate project files when committing other changes. Stage generated files only when required by the assignment instructions.
+
+## 8. Environment Verification
+Before starting the assignment, confirm that
+- VS Code is connected to Ubuntu through WSL.
+- The terminal is in the correct project root.
+- The `.venv` virtual environment is active.
+- All required Python libraries import successfully.
+- `generate_data.py` prints `24 1224 48`.
+- All three initial CSV files are present in `data/`.
+- Git recognises the repository and can communicate with GitHub.
+
+Once these checks pass, proceed with Part A (Data Foundation and Delay Evidence), followed by Parts B, C and D.
 
 ## Data Foundation and Delay Evidence
-
 Based on the processed shipment dataset (1,200 observations), the analysis revealed the following key insights:
 
 1. **Service Type Delay Rates:** **Express** shipments experience delays most frequently, recording a delay rate of **0.4897** (119 delayed out of 243 shipments), compared to Standard shipments at **0.2056** and Economy shipments at **0.0857**.
@@ -25,7 +142,6 @@ For Gradient Boosting, learning rate **0.1** performed best (R² = 0.931). A rat
 
 ### 4. Cross-validation
 Five-fold cross-validation was performed on the two best models.
-
 - Linear Regression: Mean R² = 0.926, Std = 0.00475
 - Gradient Boosting: Mean R² = 0.935, Std = 0.00442
 
@@ -35,7 +151,6 @@ Both models showed consistent performance across folds.
 Linear Regression was selected based on its lowest validation RMSE, even though Gradient Boosting achieved a slightly higher cross-validation R².
 
 Final test results:
-
 - **MAE:** 3.567 hours
 - **MSE:** 20.462
 - **RMSE:** 4.524 hours
