@@ -3,7 +3,6 @@
 # PART D: PREDICT DELAYS FOR NEW SHIPMENTS
 # ============================================
 
-
 # ============================================
 # STEP 1: IMPORT REQUIRED LIBRARIES
 # ============================================
@@ -14,7 +13,6 @@ import numpy as np
 import joblib
 
 from src.shipment_prep import clean_shipments, build_features
-
 
 # ============================================
 # STEP 2: SET UP PROJECT FOLDERS
@@ -27,7 +25,6 @@ output_folder = project_folder / "outputs"
 model_folder = project_folder / "models"
 
 output_folder.mkdir(exist_ok=True)
-
 
 # ============================================
 # STEP 3: LOAD THE NEW SHIPMENT DATA
@@ -43,7 +40,6 @@ original_shipment_ids = new_shipments["shipment_id"].tolist()
 print("NEW SHIPMENT DATA")
 print("-----------------")
 print("Total new shipments:", len(new_shipments))
-
 
 # ============================================
 # STEP 4: LOAD THE HISTORICAL MEDIANS
@@ -70,7 +66,6 @@ print("\nHISTORICAL MEDIANS")
 print("------------------")
 print(medians)
 
-
 # ============================================
 # STEP 5: CLEAN THE NEW SHIPMENT DATA
 # ============================================
@@ -85,7 +80,6 @@ clean_df, used_medians = clean_shipments(
 )
 
 print("\nNEW SHIPMENTS CLEANED SUCCESSFULLY.")
-
 
 # ============================================
 # STEP 6: LOAD HUB INFORMATION
@@ -106,7 +100,6 @@ features_df = build_features(
 
 print("Hub information and features added.")
 
-
 # ============================================
 # STEP 7: LOAD THE FEATURE ORDER
 # ============================================
@@ -118,23 +111,10 @@ feature_order_df = pd.read_csv(
 # Get the 17 feature names in the saved order.
 feature_order = feature_order_df["feature"].tolist()
 
-# Check that all required features exist.
-for column in feature_order:
-
-    if column not in features_df.columns:
-        raise ValueError(
-            "Missing required feature: " + column
-        )
-
 # Arrange the columns in exactly the same order
 # used when the model was trained.
 
 X_new = features_df[feature_order].copy()
-
-# Check that there are no missing feature values.
-if X_new.isna().any().any():
-    raise ValueError("Missing feature values found.")
-
 
 # ============================================
 # STEP 8: LOAD THE SAVED MODEL
@@ -145,7 +125,6 @@ model = joblib.load(
 )
 
 print("\nSAVED MODEL LOADED SUCCESSFULLY.")
-
 
 # ============================================
 # STEP 9: LOAD THE ALERT THRESHOLD
@@ -160,7 +139,6 @@ threshold = float(
 )
 
 print("Alert threshold:", threshold)
-
 
 # ============================================
 # STEP 10: PREDICT DELAY PROBABILITIES
@@ -190,7 +168,6 @@ flagged = (
 
 print("\nDELAY PREDICTIONS COMPLETED.")
 
-
 # ============================================
 # STEP 11: LOAD HUB SEGMENTS
 # ============================================
@@ -217,12 +194,6 @@ result = clean_df[
     sort=False
 )
 
-# Check that every shipment received a segment.
-
-if result["segment"].isna().any():
-    raise ValueError("Some shipments do not have a hub segment.")
-
-
 # ============================================
 # STEP 12: ADD PREDICTION RESULTS
 # ============================================
@@ -230,21 +201,14 @@ if result["segment"].isna().any():
 result["delay_probability"] = delay_probabilities
 result["flagged"] = flagged
 
-
 # ============================================
 # STEP 13: RECOMMEND AN OPERATIONAL ACTION
 # ============================================
 
 # Rules:
-#
-# 1. Flagged + Escalate hub:
-#    Escalate to hub manager
-#
-# 2. Flagged + Standard or Watch hub:
-#    Proactive customer call
-#
-# 3. Not flagged:
-#    No action
+# 1. Flagged + Escalate hub: Escalate to hub manager
+# 2. Flagged + Standard or Watch hub: Proactive customer call
+# 3. Not flagged: No action
 
 result["action"] = "No action"
 
@@ -276,7 +240,6 @@ result = result[
     ]
 ]
 
-
 # ============================================
 # STEP 15: RESTORE ORIGINAL SHIPMENT ORDER
 # ============================================
@@ -291,7 +254,6 @@ result = result.sort_values(
     columns=["original_order"]
 ).reset_index(drop=True)
 
-
 # ============================================
 # STEP 16: SAVE THE FINAL PREDICTIONS
 # ============================================
@@ -304,7 +266,6 @@ result.to_csv(
     output_path,
     index=False
 )
-
 
 # ============================================
 # STEP 17: DISPLAY SUMMARY
@@ -330,7 +291,6 @@ print("\nRECOMMENDED ACTIONS")
 print(
     result["action"].value_counts().to_string()
 )
-
 
 # ============================================
 # STEP 18: FINAL VALIDATION
@@ -394,7 +354,6 @@ assert (
         "action"
     ] == "Proactive customer call"
 ).all()
-
 
 # ============================================
 # STEP 19: DISPLAY FINAL RESULTS

@@ -12,7 +12,6 @@ from itertools import combinations
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 
-
 # STEP 1: Find the project folders
 
 project_folder = Path(__file__).resolve().parent
@@ -22,7 +21,6 @@ output_folder = project_folder / "outputs"
 
 output_folder.mkdir(exist_ok=True)
 
-
 # STEP 2: Read the historical shipment data and hub data
 
 df = pd.read_csv(data_folder / "modelling_table.csv")
@@ -30,7 +28,6 @@ hubs = pd.read_csv(data_folder / "hubs.csv")
 
 print("Total historical shipments:", len(df))
 print("Total hubs:", hubs["hub_id"].nunique())
-
 
 # STEP 3: Create one profile for each hub
 
@@ -57,7 +54,6 @@ hub_profile.to_csv(
 print("\nHub profile created:")
 print(hub_profile.head())
 
-
 # STEP 4: Scale the four measurements
 
 # These four columns have different units and ranges.
@@ -75,7 +71,6 @@ scaler = StandardScaler()
 scaled_data = scaler.fit_transform(
     hub_profile[profile_columns]
 )
-
 
 # STEP 5: Compare different numbers of clusters
 
@@ -137,7 +132,6 @@ for k in k_values:
         )
     })
 
-
 # Save the separation comparison.
 separation_df = pd.DataFrame(separation_results)
 
@@ -148,7 +142,6 @@ separation_df.to_csv(
 
 print("\nK-Means separation comparison:")
 print(separation_df.round(3).to_string(index=False))
-
 
 # STEP 6: Create the final three hub segments
 
@@ -164,7 +157,6 @@ final_kmeans = KMeans(
 hub_profile["cluster"] = final_kmeans.fit_predict(
     scaled_data
 )
-
 
 # STEP 7: Give meaningful names to the three clusters
 
@@ -186,7 +178,6 @@ segment_names = {
 hub_profile["segment"] = hub_profile["cluster"].map(
     segment_names
 )
-
 
 # STEP 8: Attach hub city and tier information
 
@@ -214,7 +205,6 @@ hub_segments.to_csv(
 
 print("\nHub segment assignments:")
 print(hub_segments.to_string(index=False))
-
 
 # STEP 9: Create the segment performance profile
 
@@ -249,7 +239,6 @@ segment_profile.to_csv(
 
 print("\nSegment performance profile:")
 print(segment_profile.round(4).to_string(index=False))
-
 
 # STEP 10: Find tier-versus-segment mismatches
 

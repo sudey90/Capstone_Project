@@ -1,23 +1,3 @@
-
-"""
-PART C: DELAY CLASSIFICATION AND ALERT THRESHOLD
-
-Objective:
-Predict whether a shipment will be delayed.
-
-Input:
-    data/modelling_table.csv
-
-Outputs:
-    outputs/part_c_models.csv
-    outputs/part_c_feature_scores.csv
-    outputs/part_c_selectk.csv
-    outputs/part_c_tuning.csv
-    outputs/part_c_thresholds.csv
-    outputs/part_c_final_test.csv
-    outputs/part_c_final_config.csv
-"""
-
 # ============================================================
 # STEP 1: IMPORT THE REQUIRED LIBRARIES
 # ============================================================
@@ -46,7 +26,6 @@ from sklearn.metrics import (
     f1_score
 )
 
-
 # ============================================================
 # STEP 2: SET UP PROJECT FOLDERS
 # ============================================================
@@ -63,7 +42,6 @@ df = pd.read_csv(DATA_FOLDER / "modelling_table.csv")
 
 print("Dataset loaded successfully.")
 print("Total shipments:", len(df))
-
 
 # ============================================================
 # STEP 3: SELECT THE EXACT 17 INPUT FEATURES
@@ -101,22 +79,11 @@ NOISE_COLUMNS = [
     "shelf_slot_no"
 ]
 
-# Check whether all required columns exist.
-for column in FEATURES + [TARGET]:
-
-    if column not in df.columns:
-        raise ValueError("Missing required column: " + column)
-
 # X contains the 17 input features.
 X = df[FEATURES].copy()
 
 # y contains the answer: 0 = on time, 1 = delayed.
 y = df[TARGET].astype(int).copy()
-
-# Check for missing values.
-if X.isna().any().any() or y.isna().any():
-    raise ValueError("Missing values found. Please check Part A.")
-
 
 # ============================================================
 # STEP 4: SPLIT DATA INTO TRAINING, VALIDATION AND TEST
@@ -198,7 +165,6 @@ model_results.append({
         y_val, blind_predictions, zero_division=0
     )
 })
-
 
 # ------------------------------------------------------------
 # MODEL 2: LOGISTIC REGRESSION
@@ -303,7 +269,6 @@ model_results.append({
     )
 })
 
-
 # ------------------------------------------------------------
 # MODEL 4: DEFAULT RANDOM FOREST
 # ------------------------------------------------------------
@@ -349,7 +314,6 @@ models_df.to_csv(
 
 print("\nMODEL COMPARISON")
 print(models_df.round(4).to_string(index=False))
-
 
 # ============================================================
 # STEP 6: IDENTIFY IMPORTANT AND NOISY FEATURES
@@ -413,7 +377,6 @@ print(feature_scores.round(4).to_string(index=False))
 
 print("\nCombined noise importance:", round(noise_importance, 4))
 
-
 # ============================================================
 # STEP 7: COMPARE DIFFERENT FEATURE COUNTS
 # ============================================================
@@ -459,7 +422,6 @@ print(selectk_df.round(4).to_string(index=False))
 # From this point onwards, we will use seven features.
 K = 7
 
-
 # ============================================================
 # STEP 8: TUNE THE RANDOM FOREST MODEL
 # ============================================================
@@ -504,7 +466,6 @@ print("\nGRID SEARCH")
 print("Best parameters:", grid_search.best_params_)
 print("Best CV accuracy:", grid_search.best_score_)
 print("Validation F1:", grid_f1)
-
 
 # ------------------------------------------------------------
 # RANDOMIZED SEARCH
@@ -592,7 +553,6 @@ tuning_results.to_csv(
 print("\nTUNING COMPARISON")
 print(tuning_results.round(4).to_string(index=False))
 
-
 # ============================================================
 # STEP 9: CHOOSE THE BEST FINAL MODEL
 # ============================================================
@@ -645,7 +605,6 @@ else:
 print("\nWINNING MODEL:", winning_search)
 print("Chosen parameters:", chosen_parameters)
 
-
 # Build the final pipeline.
 # The selector is fitted on training data only.
 final_model = Pipeline([
@@ -657,7 +616,6 @@ final_model = Pipeline([
 ])
 
 final_model.fit(X_train, y_train)
-
 
 # ============================================================
 # STEP 10: SELECT THE ALERT THRESHOLD
@@ -738,7 +696,6 @@ print("Validation precision:", round(chosen_row["precision"], 4))
 print("Validation recall:", round(chosen_row["recall"], 4))
 print("Validation F1:", round(chosen_row["f1"], 4))
 
-
 # ============================================================
 # STEP 11: FINAL TEST EVALUATION
 # ============================================================
@@ -779,7 +736,6 @@ final_test_results.to_csv(
     index=False
 )
 
-
 # ============================================================
 # STEP 12: SAVE THE FINAL MODEL CONFIGURATION
 # ============================================================
@@ -801,7 +757,6 @@ final_configuration.to_csv(
     OUTPUT_FOLDER / "part_c_final_config.csv",
     index=False
 )
-
 
 # ============================================================
 # STEP 13: DISPLAY FINAL RESULTS

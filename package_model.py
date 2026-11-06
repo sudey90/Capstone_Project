@@ -1,4 +1,3 @@
-
 # ============================================
 # PART D: PACKAGE THE FINAL CLASSIFICATION MODEL
 # ============================================
@@ -17,7 +16,6 @@ from sklearn.pipeline import Pipeline
 
 from src.shipment_prep import clean_shipments
 
-
 # ============================================
 # STEP 2: SET UP PROJECT FOLDERS
 # ============================================
@@ -30,7 +28,6 @@ model_folder = project_folder / "models"
 
 output_folder.mkdir(exist_ok=True)
 model_folder.mkdir(exist_ok=True)
-
 
 # ============================================
 # STEP 3: READ THE PART C CONFIGURATION
@@ -63,7 +60,6 @@ print("Maximum depth:", max_depth)
 print("Minimum samples per leaf:", min_samples_leaf)
 print("Alert threshold:", threshold)
 
-
 # ============================================
 # STEP 4: DEFINE THE SAME 17 FEATURES FROM PART C
 # ============================================
@@ -90,7 +86,6 @@ FEATURES = [
 
 TARGET = "is_delayed"
 
-
 # ============================================
 # STEP 5: LOAD THE HISTORICAL DATA
 # ============================================
@@ -103,7 +98,6 @@ X = df[FEATURES].copy()
 y = df[TARGET].astype(int).copy()
 
 print("\nTOTAL HISTORICAL SHIPMENTS:", len(df))
-
 
 # ============================================
 # STEP 6: RECREATE THE SAME DATA SPLIT AS PART C
@@ -143,7 +137,6 @@ assert len(X_train) == 840
 assert len(X_val) == 180
 assert len(X_test) == 180
 
-
 # ============================================
 # STEP 7: BUILD THE FINAL MODEL
 # ============================================
@@ -170,7 +163,6 @@ final_model = Pipeline([
     )
 ])
 
-
 # ============================================
 # STEP 8: TRAIN THE FINAL MODEL
 # ============================================
@@ -179,7 +171,6 @@ final_model = Pipeline([
 final_model.fit(X_train, y_train)
 
 print("\nFinal model trained successfully.")
-
 
 # ============================================
 # STEP 9: SAVE THE TRAINED MODEL
@@ -190,7 +181,6 @@ model_path = model_folder / "delay_model.pkl"
 joblib.dump(final_model, model_path)
 
 print("Saved model:", model_path)
-
 
 # ============================================
 # STEP 10: SAVE THE ALERT THRESHOLD
@@ -204,7 +194,6 @@ threshold_df.to_csv(
     model_folder / "delay_threshold.csv",
     index=False
 )
-
 
 # ============================================
 # STEP 11: SAVE THE FEATURE ORDER
@@ -245,7 +234,6 @@ impute_df.to_csv(
 
 print("\nMODEL SUPPORT FILES SAVED.")
 
-
 # ============================================
 # STEP 13: RELOAD THE SAVED MODEL
 # ============================================
@@ -254,7 +242,6 @@ print("\nMODEL SUPPORT FILES SAVED.")
 loaded_model = joblib.load(model_path)
 
 print("Saved model loaded successfully.")
-
 
 # ============================================
 # STEP 14: COMPARE MODEL PREDICTIONS
@@ -288,7 +275,6 @@ print("------------------")
 print("Test rows scored:", len(X_test))
 print("Maximum probability difference:", max_difference)
 
-
 # ============================================
 # STEP 15: SAVE THE RELOAD CHECK RESULTS
 # ============================================
@@ -310,7 +296,6 @@ reload_check.to_csv(
     output_folder / "part_d_reload_check.csv",
     index=False
 )
-
 
 # ============================================
 # STEP 16: FINAL VALIDATION

@@ -1,8 +1,3 @@
-"""PART B: DELIVERY-HOURS REGRESSION
-
-Uses the exact 17 FEATURES in the assignment and predicts delivery_hours.
-Input: data/modelling_table.csv
-"""
 
 # ============================================================
 # STEP 1: IMPORT LIBRARIES
@@ -337,7 +332,6 @@ test_predictions_df = pd.DataFrame({
 test_predictions_df.to_csv(
     OUTPUT_FOLDER / "part_b_test_predictions.csv", index_label="row_index"
 )
-
 
 # ============================================================
 # STEP 16: SAVE THE TRAINED MODEL FOR LATER USE
